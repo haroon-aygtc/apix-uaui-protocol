@@ -123,6 +123,9 @@ yarn exec turbo link
 pnpm exec turbo link
 ```
 
+## Documentation
+See top-level `docs/README.md` for REST, WebSocket, backend decorators, UI components, and utilities.
+
 ## Useful Links
 
 Learn more about the power of Turborepo:
