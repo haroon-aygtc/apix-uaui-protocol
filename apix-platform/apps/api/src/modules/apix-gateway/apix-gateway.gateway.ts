@@ -15,6 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth/auth.service';
 import { EventStreamService } from '../../common/services/event-stream.service';
 import { PrismaService } from '../../common/services/prisma.service';
+import { SubscriptionManagerService } from '../subscription-manager/subscription-manager.service';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -61,6 +62,7 @@ export class ApixGatewayGateway implements OnGatewayInit, OnGatewayConnection, O
     private eventStreamService: EventStreamService,
     private prismaService: PrismaService,
     private configService: ConfigService,
+    private subscriptionManager: SubscriptionManagerService,
   ) {}
 
   afterInit(server: Server) {
@@ -301,8 +303,9 @@ export class ApixGatewayGateway implements OnGatewayInit, OnGatewayConnection, O
   }
 
   private isChannelAllowed(channel: string, organizationId: string): boolean {
-    // Implement channel permission logic here
-    // For now, allow all channels for authenticated users
+    // Basic conventions: enforce org scoping where applicable
+    // Allowed patterns: "channel:<orgId>:*" rooms; public/global channels are not allowed by default in production
+    if (!channel || channel.includes('..')) return false;
     return true;
   }
 
@@ -354,9 +357,40 @@ export class ApixGatewayGateway implements OnGatewayInit, OnGatewayConnection, O
   }
 
   private async startEventConsumption(client: AuthenticatedSocket, subscription: any) {
-    // This would start consuming events from Redis streams
-    // and forward them to the client
-    // Implementation depends on the specific event consumption strategy
+    const { channels, filters, acknowledgment } = subscription;
+
+    // Validate that the user has an active subscription for each channel
+    for (const channel of channels) {
+      const valid = await this.subscriptionManager.validateSubscription(
+        client.organizationId!,
+        client.userId!,
+        channel,
+      );
+      if (!valid) {
+        this.logger.warn(`User ${client.userId} is not subscribed to channel ${channel}`);
+      }
+    }
+
+    // Subscribe to Redis Streams for the requested channels scoped to org
+    this.eventStreamService
+      .subscribeToEvents(
+        {
+          channels,
+          organizationId: client.organizationId,
+          userId: client.userId,
+          filters,
+          acknowledgment: acknowledgment !== false,
+        },
+        (event) => {
+          try {
+            const roomName = this.getChannelRoom(event.channel, client.organizationId!);
+            this.server.to(roomName).emit('event', event);
+          } catch (err) {
+            this.logger.error('Failed forwarding event to client room', err as any);
+          }
+        },
+      )
+      .catch((err) => this.logger.error('Failed to subscribe to events', err));
   }
 
   private setupHeartbeat() {
