@@ -256,3 +256,6 @@ For support and questions:
 ---
 
 **Built with ❤️ for enterprise-grade security and scalability**
+
+## Documentation
+See `docs/README.md` for the full API and SDK documentation.
