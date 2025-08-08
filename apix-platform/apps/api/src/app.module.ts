@@ -15,6 +15,7 @@ import { websocketConfig } from './config/websocket.config';
 // Import common modules
 import { RedisModule } from './common/redis.module';
 import { DatabaseModule } from './common/database.module';
+import { SseController } from './common/controllers/sse.controller';
 
 // Import modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -73,7 +74,7 @@ import { RBACModule } from './modules/rbac/rbac.module';
     AuditLoggerModule,
     RBACModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, SseController],
   providers: [AppService],
 })
 export class AppModule {}
